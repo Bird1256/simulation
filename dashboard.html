@@ -1,65 +1,175 @@
-# ============================================
-# database.py — SQLite Database Schema (เวอร์ชันใช้งานจริง)
-# ============================================
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📊 Dashboard – สรุปผลการเงิน</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
-from datetime import datetime
+<body class="bg-gray-100 text-gray-800 min-h-screen">
+  <div class="max-w-5xl mx-auto py-10 px-6">
+    <h1 class="text-3xl font-bold text-center text-blue-700 mb-8">
+      📈 Dashboard – ประวัติการจำลองการเงิน
+    </h1>
 
-# ----------------------------
-# 🔗 การเชื่อมต่อฐานข้อมูล
-# ----------------------------
-DATABASE_URL = "sqlite:///./finance.db"
+    <!-- 🔹 Dropdown รายชื่อผู้ใช้ -->
+    <div class="mb-6 flex justify-center gap-3">
+      <select id="userSelect" class="border p-2 rounded-lg w-60 text-center shadow">
+        <option value="">-- เลือกชื่อผู้ใช้ --</option>
+      </select>
+      <button onclick="loadHistory()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow">
+        แสดงข้อมูล
+      </button>
+    </div>
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+    <!-- 🔹 ตารางข้อมูล -->
+    <div id="historyTable" class="bg-white p-6 rounded-2xl shadow hidden">
+      <h2 class="text-xl font-semibold text-blue-700 mb-4">📋 ประวัติการจำลอง</h2>
+      <table class="w-full border-collapse border border-gray-300">
+        <thead class="bg-blue-100">
+          <tr>
+            <th class="border p-2">เดือน</th>
+            <th class="border p-2">รายได้ (บาท)</th>
+            <th class="border p-2">รายจ่ายรวม (บาท)</th>
+            <th class="border p-2">คงเหลือ (บาท)</th>
+            <th class="border p-2">วันที่บันทึก</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
 
-# ----------------------------
-# 👤 ตารางผู้ใช้ (Users)
-# ----------------------------
-class User(Base):
-    __tablename__ = "users"
+    <!-- 🔹 กราฟ -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+      <div class="bg-white p-6 rounded-2xl shadow">
+        <h3 class="text-lg font-semibold text-center text-blue-700 mb-2">🧾 สัดส่วนรายจ่าย</h3>
+        <canvas id="pieChart"></canvas>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow">
+        <h3 class="text-lg font-semibold text-center text-blue-700 mb-2">💰 รายได้ - รายจ่ายต่อเดือน</h3>
+        <canvas id="barChart"></canvas>
+      </div>
+    </div>
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    <div class="text-center mt-10">
+      <a href="index.html" class="text-blue-600 hover:underline">⬅ กลับไปหน้าจำลอง</a>
+    </div>
+  </div>
 
-    records = relationship("FinanceRecord", back_populates="user")
+  <script>
+    const API_URL = "http://127.0.0.1:8001";
 
-# ----------------------------
-# 💰 ตารางบันทึกรายรับรายจ่าย (FinanceRecord)
-# ----------------------------
-class FinanceRecord(Base):
-    __tablename__ = "finance_records"
+    // โหลดรายชื่อผู้ใช้ทั้งหมด
+    async function loadUserList() {
+      try {
+        const res = await fetch(`${API_URL}/history/summary`);
+        const data = await res.json();
+        const select = document.getElementById("userSelect");
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    month = Column(String)
-    income = Column(Float)
-    house = Column(Float)
-    car = Column(Float)
-    food = Column(Float)
-    saving = Column(Float)
-    travel = Column(Float)
-    total_expense = Column(Float)
-    balance = Column(Float)
-    cumulative_saving = Column(Float, default=0)
-    created_at = Column(DateTime, default=datetime.now)
+        data.users.forEach(u => {
+          const opt = document.createElement("option");
+          opt.value = u;
+          opt.textContent = u;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error("โหลดรายชื่อผู้ใช้ล้มเหลว:", err);
+      }
+    }
 
-    # ✅ เพิ่มคอลัมน์ใหม่เก็บรายละเอียดรายจ่าย (JSON string)
-    detail = Column(String, nullable=True)
+    // โหลดประวัติของผู้ใช้
+    async function loadHistory() {
+      const name = document.getElementById("userSelect").value;
+      if (!name) {
+        alert("กรุณาเลือกชื่อผู้ใช้ก่อน");
+        return;
+      }
 
-    user = relationship("User", back_populates="records")
+      try {
+        const res = await fetch(`${API_URL}/history/${name}`);
+        const data = await res.json();
 
-# ----------------------------
-# 🧱 ฟังก์ชันสร้างตาราง
-# ----------------------------
-def init_db():
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database & Tables created successfully: finance.db")
+        document.getElementById("historyTable").classList.remove("hidden");
+        const tbody = document.getElementById("historyBody");
+        tbody.innerHTML = "";
 
-# ----------------------------
-# 🚀 ถ้ารันไฟล์นี้โดยตรง จะสร้างฐานข้อมูลทันที
-# ----------------------------
-if __name__ == "__main__":
-    init_db()
+        data.records.forEach(r => {
+          const row = `
+            <tr class="border-b hover:bg-gray-50">
+              <td class="p-2 text-center">${r.month}</td>
+              <td class="p-2 text-center">${r.income.toLocaleString()}</td>
+              <td class="p-2 text-center">${r.total_expense.toLocaleString()}</td>
+              <td class="p-2 text-center">${r.balance.toLocaleString()}</td>
+              <td class="p-2 text-center">${r.created_at}</td>
+            </tr>`;
+          tbody.innerHTML += row;
+        });
+
+        // คำนวณค่าเฉลี่ยหมวดรายจ่าย
+        const last = data.records[data.records.length - 1];
+        const res2 = await fetch(`${API_URL}/history/${name}`);
+        const all = await res2.json();
+
+        if (last) drawCharts(name, last, all.records);
+      } catch (err) {
+        console.error("โหลดประวัติผู้ใช้ล้มเหลว:", err);
+      }
+    }
+
+    // วาดกราฟ
+    function drawCharts(name, lastRecord, records) {
+      // Pie chart
+      const expenses = JSON.parse(lastRecord.detail || "{}");
+      const labels = Object.keys(expenses);
+      const values = Object.values(expenses);
+
+      const ctx1 = document.getElementById("pieChart").getContext("2d");
+      new Chart(ctx1, {
+        type: "pie",
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: ["#60a5fa", "#34d399", "#fbbf24", "#f87171", "#a78bfa"]
+          }]
+        },
+        options: {
+          plugins: { legend: { position: "bottom" } }
+        }
+      });
+
+      // Bar chart
+      const ctx2 = document.getElementById("barChart").getContext("2d");
+      new Chart(ctx2, {
+        type: "bar",
+        data: {
+          labels: records.map(r => r.month),
+          datasets: [
+            {
+              label: "รายได้",
+              data: records.map(r => r.income),
+              backgroundColor: "#34d399"
+            },
+            {
+              label: "รายจ่ายรวม",
+              data: records.map(r => r.total_expense),
+              backgroundColor: "#f87171"
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: "bottom" } },
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: "จำนวนเงิน (บาท)" } }
+          }
+        }
+      });
+    }
+
+    loadUserList();
+  </script>
+</body>
+</html>

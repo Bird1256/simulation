@@ -1,19 +1,19 @@
 // ================================
-// 💰 Simulation Frontend Script (Fixed Version)
+// 💰 Simulation Frontend Script (Fix: Stay-on screen forever)
 // ================================
 
 const API_BASE = "http://127.0.0.1:8001";
 const baht = (n) => Number(n || 0).toLocaleString("th-TH", { maximumFractionDigits: 2 });
 const getNumber = (id) => parseFloat(document.getElementById(id).value) || 0;
 
-// ----------------------
-// 🎯 Event Listeners
-// ----------------------
 document.getElementById("btnSim").addEventListener("click", simulate);
 document.getElementById("btnHistory").addEventListener("click", showHistory);
 
+// 🔐 ปิดการ reload ฟอร์มจากเบราว์เซอร์โดยตรง
+window.addEventListener("submit", (e) => e.preventDefault(), true);
+
 // ----------------------
-// 🧮 ฟังก์ชันจำลองการเงิน
+// 🧮 ฟังก์ชันจำลอง
 // ----------------------
 async function simulate(e) {
   if (e) e.preventDefault();
@@ -37,35 +37,30 @@ async function simulate(e) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, income, expenses }),
     });
+    if (!res.ok) throw new Error("API ตอบกลับผิดพลาด");
 
-    if (!res.ok) throw new Error("API ตอบกลับผิดพลาด: " + res.status);
     const data = await res.json();
-    console.log("✅ ได้ข้อมูลจำลองจาก API:", data);
-
     renderResult(data);
   } catch (err) {
-    console.error("❌ Error:", err);
-    alert("ไม่สามารถเชื่อมต่อ API ได้ กรุณาตรวจสอบการรัน main.py");
+    console.error(err);
+    alert("❌ ไม่สามารถเชื่อมต่อ API ได้ กรุณาตรวจสอบการรัน main.py");
   }
 }
 
 // ----------------------
-// 📊 แสดงผลจำลอง
+// 📊 แสดงผลจำลอง (ค้างไว้ถาวร)
 // ----------------------
 function renderResult(data) {
   const resultWrap = document.getElementById("resultWrap");
   const historyWrap = document.getElementById("historyWrap");
 
-  // 🔒 ป้องกันการซ่อนผลลัพธ์โดยอัตโนมัติ
-  window.__showingResult = true;
+  // ปิดการรีเซ็ตและรีเฟรชอัตโนมัติทุกกรณี
+  window.__lockSimulation = true;
 
-  // ซ่อนประวัติ และแสดงผลจำลอง
-  historyWrap.classList.add("hidden");
   resultWrap.classList.remove("hidden");
+  historyWrap.classList.add("hidden");
 
   const s = data.summary;
-
-  // ✅ แสดงข้อมูลสรุป
   document.getElementById("summary").innerHTML = `
     <p>ชื่อผู้ใช้: <b>${s.name}</b></p>
     <p>รายได้ต่อเดือน: ${baht(s.monthly_income)} บาท</p>
@@ -74,7 +69,6 @@ function renderResult(data) {
     <p>เงินออมรวม 12 เดือน: <b class="text-blue-700">${baht(s.total_saving_12m)}</b> บาท</p>
   `;
 
-  // ✅ แสดงตารางรายจ่าย
   const tbody1 = document.getElementById("breakdownTbody");
   tbody1.innerHTML = Object.entries(s.expenses)
     .map(
@@ -86,7 +80,6 @@ function renderResult(data) {
     )
     .join("");
 
-  // ✅ แสดงตารางจำลอง 12 เดือน
   const tbody2 = document.getElementById("monthlyTbody");
   tbody2.innerHTML = data.simulation_result
     .map(
@@ -99,21 +92,14 @@ function renderResult(data) {
     )
     .join("");
 
-  // ✅ แสดงคำแนะนำ
-  const adviceBox = document.getElementById("adviceBox");
-  adviceBox.classList.remove("hidden");
+  document.getElementById("adviceBox").classList.remove("hidden");
   document.getElementById("adviceText").textContent = s.advice;
 
-  // ✅ ป้องกันการ reload ฟอร์มอัตโนมัติ
-  const form = document.querySelector("form");
-  if (form) form.onsubmit = (ev) => ev.preventDefault();
-
-  // ✅ Scroll ให้เห็นผลลัพธ์
-  resultWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+  resultWrap.scrollIntoView({ behavior: "smooth" });
 }
 
 // ----------------------
-// 🧠 ฟังก์ชันดูประวัติ
+// 🧠 ดูประวัติ
 // ----------------------
 async function showHistory(e) {
   if (e) e.preventDefault();
@@ -123,20 +109,14 @@ async function showHistory(e) {
 
   try {
     const res = await fetch(`${API_BASE}/history/${encodeURIComponent(name)}`);
-    if (!res.ok) throw new Error("โหลดประวัติไม่สำเร็จ");
     const data = await res.json();
-
-    if (!data.records || data.records.length === 0) {
-      alert("ยังไม่มีข้อมูลประวัติของผู้ใช้นี้");
-      return;
-    }
+    if (!data.records || data.records.length === 0) return alert("ยังไม่มีข้อมูลประวัติ");
 
     const resultWrap = document.getElementById("resultWrap");
     const historyWrap = document.getElementById("historyWrap");
-
-    // ซ่อนผลจำลอง แสดงประวัติแทน
     resultWrap.classList.add("hidden");
     historyWrap.classList.remove("hidden");
+    window.__lockSimulation = false; // ปลดล็อกตอนกดดูประวัติ
 
     const tbody = document.getElementById("historyTbody");
     tbody.innerHTML = data.records
@@ -151,16 +131,14 @@ async function showHistory(e) {
         </tr>`
       )
       .join("");
-
-    historyWrap.scrollIntoView({ behavior: "smooth" });
   } catch (err) {
     console.error(err);
-    alert("❌ ไม่สามารถโหลดประวัติได้");
+    alert("❌ โหลดประวัติไม่สำเร็จ");
   }
 }
 
 // ----------------------
-// 🔤 ฟังก์ชันแปลชื่อหมวดรายจ่าย
+// 🔤 แปลชื่อหมวดรายจ่าย
 // ----------------------
 function translateExpenseKey(key) {
   const dict = {
@@ -174,10 +152,10 @@ function translateExpenseKey(key) {
 }
 
 // ----------------------
-// 🛡️ ป้องกันการรีเฟรชหรือซ่อนผลจำลอง
+// 🚫 ป้องกัน browser ล้างผลจำลอง
 // ----------------------
 window.addEventListener("beforeunload", (e) => {
-  if (window.__showingResult) {
+  if (window.__lockSimulation) {
     e.preventDefault();
     e.returnValue = "";
   }
