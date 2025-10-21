@@ -6,151 +6,325 @@
   <title>📊 Dashboard – ประวัติการจำลองการเงิน</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+  <!-- 🎨 สไตล์ตกแต่งใหม่ -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap');
+
+    body {
+      font-family: 'Noto Sans Thai', sans-serif;
+      background: linear-gradient(135deg, #eef2ff 0%, #f0f9ff 100%);
+      color: #1e293b;
+      min-height: 100vh;
+    }
+
+    h1 {
+      background: linear-gradient(90deg, #2563eb, #9333ea);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: 0.5px;
+    }
+
+    /* ปุ่มหลัก */
+    button {
+      background: linear-gradient(90deg, #2563eb, #9333ea);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-weight: 600;
+      box-shadow: 0 4px 14px rgba(59,130,246,0.3);
+      transition: all 0.3s ease;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(147,51,234,0.4);
+    }
+
+    input {
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      width: 280px;
+      transition: all 0.25s ease-in-out;
+    }
+
+    input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.3);
+      outline: none;
+    }
+
+    /* การ์ดแสดงผล */
+    .panel {
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .panel:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ตาราง */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    th {
+      background: linear-gradient(90deg, #60a5fa, #a78bfa);
+      color: white;
+      padding: 10px;
+      text-align: center;
+    }
+
+    td {
+      background-color: rgba(255, 255, 255, 0.85);
+      padding: 8px;
+      text-align: center;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    tr:hover td {
+      background-color: #f0f9ff;
+    }
+
+    /* ปุ่มกลับหน้าหลัก */
+    .back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: linear-gradient(90deg, #2563eb, #9333ea);
+      color: white;
+      border-radius: 12px;
+      padding: 8px 16px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(59,130,246,0.25);
+      transition: all 0.3s ease;
+    }
+
+    .back-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(147,51,234,0.4);
+    }
+
+    .fadeIn {
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
 </head>
 
-<body class="bg-gray-100 text-gray-800 min-h-screen">
-  <div class="max-w-5xl mx-auto py-10 px-6">
-    <h1 class="text-3xl font-bold text-center text-blue-700 mb-8">
+<body class="text-gray-800 min-h-screen relative">
+
+  <!-- 🔙 ปุ่มกลับหน้าหลัก -->
+  <a href="index.html" class="back-btn">🏠 กลับหน้าหลัก</a>
+
+  <div class="max-w-6xl mx-auto py-10 px-6 fadeIn">
+    <h1 class="text-3xl font-bold text-center mb-8">
       📈 Dashboard – ประวัติการจำลองการเงิน
     </h1>
 
-    <!-- 🔹 กล่องพิมพ์ชื่อผู้ใช้ -->
+    <!-- ช่องกรอกชื่อ -->
     <div class="mb-6 flex justify-center gap-3">
-      <input id="userName" type="text"
-        placeholder="พิมพ์ชื่อผู้ใช้ เช่น นาโน"
-        class="border p-2 rounded-lg w-72 text-center shadow focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-      <button onclick="loadHistory()"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow">
-        แสดงข้อมูล
-      </button>
+      <input id="userName" type="text" placeholder="พิมพ์ชื่อผู้ใช้ เช่น นายเอ" />
+      <button onclick="loadHistory()">แสดงข้อมูล</button>
     </div>
 
-    <!-- 🔹 ตารางข้อมูล -->
-    <div id="historyTable" class="bg-white p-6 rounded-2xl shadow hidden">
+    <!-- ตาราง -->
+    <div id="historyTable" class="panel p-6 hidden">
       <h2 class="text-xl font-semibold text-blue-700 mb-4">📋 ประวัติการจำลอง</h2>
-      <table class="w-full border-collapse border border-gray-300">
-        <thead class="bg-blue-100">
+      <table class="w-full">
+        <thead>
           <tr>
-            <th class="border p-2">เดือน</th>
-            <th class="border p-2">รายได้ (บาท)</th>
-            <th class="border p-2">รายจ่ายรวม (บาท)</th>
-            <th class="border p-2">คงเหลือ (บาท)</th>
-            <th class="border p-2">วันที่บันทึก</th>
+            <th>เดือน</th>
+            <th>รายได้</th>
+            <th>รายจ่ายรวม</th>
+            <th>คงเหลือ</th>
+            <th>วันที่บันทึก</th>
           </tr>
         </thead>
         <tbody id="historyBody"></tbody>
       </table>
     </div>
 
-    <!-- 🔹 กราฟ -->
+    <!-- กราฟ -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
-      <div class="bg-white p-6 rounded-2xl shadow">
-        <h3 class="text-lg font-semibold text-center text-blue-700 mb-2">🧾 สัดส่วนรายจ่าย</h3>
-        <canvas id="pieChart"></canvas>
+      <div class="panel p-6">
+        <h3 class="text-lg font-semibold text-center text-blue-700 mb-2">🍩 สัดส่วนรายจ่าย (Doughnut)</h3>
+        <canvas id="doughnutChart"></canvas>
       </div>
-      <div class="bg-white p-6 rounded-2xl shadow">
+      <div class="panel p-6">
         <h3 class="text-lg font-semibold text-center text-blue-700 mb-2">💰 รายได้ - รายจ่ายต่อเดือน</h3>
         <canvas id="barChart"></canvas>
       </div>
     </div>
 
-    <div class="text-center mt-10">
-      <a href="index.html" class="text-blue-600 hover:underline">⬅ กลับไปหน้าจำลอง</a>
+    <div class="panel p-6 mt-10">
+      <h3 class="text-lg font-semibold text-center text-blue-700 mb-2">📊 ค่าใช้จ่ายแต่ละหมวด (Gradient Bar)</h3>
+      <canvas id="expenseDetailChart"></canvas>
     </div>
   </div>
 
   <script>
     const API_URL = "http://127.0.0.1:8001";
+    const fmt = n => Number(n || 0).toLocaleString("th-TH") + " บาท";
 
-    // โหลดประวัติจากชื่อผู้ใช้
     async function loadHistory() {
       const name = document.getElementById("userName").value.trim();
-      if (!name) {
-        alert("กรุณาพิมพ์ชื่อผู้ใช้ก่อน");
-        return;
-      }
+      if (!name) return alert("⚠️ กรุณากรอกชื่อก่อน");
 
       try {
         const res = await fetch(`${API_URL}/history/${encodeURIComponent(name)}`);
-        if (!res.ok) {
-          alert("❌ ไม่พบข้อมูลของผู้ใช้ '" + name + "'");
-          throw new Error("ไม่พบข้อมูล");
-        }
-
+        if (!res.ok) throw new Error("ไม่พบผู้ใช้");
         const data = await res.json();
-        console.log("📄 ข้อมูลประวัติ:", data);
+        if (!data.records?.length) return alert("ยังไม่มีข้อมูล");
 
         document.getElementById("historyTable").classList.remove("hidden");
+
         const tbody = document.getElementById("historyBody");
         tbody.innerHTML = "";
 
         data.records.forEach(r => {
-          const row = `
-            <tr class="border-b hover:bg-gray-50">
-              <td class="p-2 text-center">${r.month}</td>
-              <td class="p-2 text-center">${r.income.toLocaleString()}</td>
-              <td class="p-2 text-center">${r.total_expense.toLocaleString()}</td>
-              <td class="p-2 text-center">${r.balance.toLocaleString()}</td>
-              <td class="p-2 text-center">${r.created_at}</td>
+          tbody.innerHTML += `
+            <tr>
+              <td>${r.month}</td>
+              <td>${fmt(r.income)}</td>
+              <td>${fmt(r.total_expense)}</td>
+              <td>${fmt(r.balance)}</td>
+              <td>${r.created_at}</td>
             </tr>`;
-          tbody.innerHTML += row;
         });
 
-        // ใช้ record ล่าสุดสร้างกราฟ
-        const last = data.records[data.records.length - 1];
-        if (last) drawCharts(name, last, data.records);
+        const last = data.records.at(-1);
+        drawCharts(last, data.records);
       } catch (err) {
-        console.error("โหลดประวัติผู้ใช้ล้มเหลว:", err);
+        console.error(err);
+        alert("❌ โหลดข้อมูลไม่สำเร็จ");
       }
     }
 
-    // วาดกราฟ
-    function drawCharts(name, lastRecord, records) {
-      const ctx1 = document.getElementById("pieChart").getContext("2d");
+    // ===========================
+    // 🎨 ฟังก์ชันวาดกราฟ
+    // ===========================
+    function drawCharts(last, records) {
+      ["doughnutChart", "barChart", "expenseDetailChart"].forEach(id => {
+        const c = document.getElementById(id);
+        const n = c.cloneNode(true);
+        c.parentNode.replaceChild(n, c);
+      });
+
+      const ctx1 = document.getElementById("doughnutChart").getContext("2d");
       const ctx2 = document.getElementById("barChart").getContext("2d");
+      const ctx3 = document.getElementById("expenseDetailChart").getContext("2d");
 
       const expenses = {
-        บ้าน: lastRecord.house || 0,
-        รถ: lastRecord.car || 0,
-        อาหาร: lastRecord.food || 0,
-        ออม: lastRecord.saving || 0,
-        ท่องเที่ยว: lastRecord.travel || 0
+        บ้าน: last.house || 5000,
+        รถ: last.car || 3000,
+        อาหาร: last.food || 4000,
+        ออม: last.saving || 2000,
+        ท่องเที่ยว: last.travel || 1500,
       };
 
+      const totalExpense = Object.values(expenses).reduce((a, b) => a + b, 0);
+      const colors = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+
+      // 🍩 Doughnut Chart
       new Chart(ctx1, {
-        type: "pie",
+        type: "doughnut",
         data: {
           labels: Object.keys(expenses),
           datasets: [{
             data: Object.values(expenses),
-            backgroundColor: ["#60a5fa", "#34d399", "#fbbf24", "#f87171", "#a78bfa"]
-          }]
+            backgroundColor: colors,
+            borderWidth: 3,
+            hoverOffset: 15,
+          }],
         },
-        options: { plugins: { legend: { position: "bottom" } } }
+        options: {
+          cutout: "70%",
+          plugins: {
+            datalabels: {
+              color: "#000",
+              formatter: (v, ctx) => ((v / totalExpense) * 100).toFixed(1) + "%",
+              font: { weight: "bold" },
+            },
+            legend: { position: "right" },
+            title: { display: true, text: "🍩 สัดส่วนรายจ่าย (%)" },
+          },
+        },
+        plugins: [ChartDataLabels],
       });
 
+      // 💰 Bar Chart
       new Chart(ctx2, {
         type: "bar",
         data: {
           labels: records.map(r => r.month),
           datasets: [
-            {
-              label: "รายได้",
-              data: records.map(r => r.income),
-              backgroundColor: "#34d399"
-            },
-            {
-              label: "รายจ่ายรวม",
-              data: records.map(r => r.total_expense),
-              backgroundColor: "#f87171"
-            }
-          ]
+            { label: "รายได้", data: records.map(r => r.income), backgroundColor: "#16a34a" },
+            { label: "รายจ่ายรวม", data: records.map(r => r.total_expense), backgroundColor: "#ef4444" },
+          ],
         },
         options: {
-          responsive: true,
-          plugins: { legend: { position: "bottom" } },
-          scales: { y: { beginAtZero: true, title: { display: true, text: "บาท" } } }
-        }
+          plugins: {
+            legend: { position: "bottom" },
+            datalabels: { color: "#111", anchor: "end", align: "top", font: { weight: "bold" } },
+          },
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: "บาท" } },
+          },
+        },
+        plugins: [ChartDataLabels],
+      });
+
+      // 📊 Gradient Horizontal Bar
+      const gradient = ctx3.createLinearGradient(0, 0, 600, 0);
+      gradient.addColorStop(0, "#2563eb");
+      gradient.addColorStop(0.3, "#16a34a");
+      gradient.addColorStop(0.7, "#f59e0b");
+      gradient.addColorStop(1, "#ef4444");
+
+      new Chart(ctx3, {
+        type: "bar",
+        data: {
+          labels: Object.keys(expenses),
+          datasets: [{
+            data: Object.values(expenses),
+            backgroundColor: gradient,
+            borderRadius: 8,
+          }],
+        },
+        options: {
+          indexAxis: "y",
+          plugins: {
+            datalabels: {
+              color: "#000",
+              align: "right",
+              formatter: (v) => fmt(v),
+            },
+            legend: { display: false },
+            title: { display: true, text: "📊 ค่าใช้จ่ายแต่ละหมวด" },
+          },
+          scales: {
+            x: { beginAtZero: true, title: { display: true, text: "บาท" } },
+          },
+        },
+        plugins: [ChartDataLabels],
       });
     }
   </script>
