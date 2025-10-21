@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>📊 Dashboard – สรุปผลการเงิน</title>
+  <title>📊 Dashboard – ประวัติการจำลองการเงิน</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -14,12 +14,13 @@
       📈 Dashboard – ประวัติการจำลองการเงิน
     </h1>
 
-    <!-- 🔹 Dropdown รายชื่อผู้ใช้ -->
+    <!-- 🔹 กล่องพิมพ์ชื่อผู้ใช้ -->
     <div class="mb-6 flex justify-center gap-3">
-      <select id="userSelect" class="border p-2 rounded-lg w-60 text-center shadow">
-        <option value="">-- เลือกชื่อผู้ใช้ --</option>
-      </select>
-      <button onclick="loadHistory()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow">
+      <input id="userName" type="text"
+        placeholder="พิมพ์ชื่อผู้ใช้ เช่น นาโน"
+        class="border p-2 rounded-lg w-72 text-center shadow focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+      <button onclick="loadHistory()"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow">
         แสดงข้อมูล
       </button>
     </div>
@@ -61,35 +62,23 @@
   <script>
     const API_URL = "http://127.0.0.1:8001";
 
-    // โหลดรายชื่อผู้ใช้ทั้งหมด
-    async function loadUserList() {
-      try {
-        const res = await fetch(`${API_URL}/history/summary`);
-        const data = await res.json();
-        const select = document.getElementById("userSelect");
-
-        data.users.forEach(u => {
-          const opt = document.createElement("option");
-          opt.value = u;
-          opt.textContent = u;
-          select.appendChild(opt);
-        });
-      } catch (err) {
-        console.error("โหลดรายชื่อผู้ใช้ล้มเหลว:", err);
-      }
-    }
-
-    // โหลดประวัติของผู้ใช้
+    // โหลดประวัติจากชื่อผู้ใช้
     async function loadHistory() {
-      const name = document.getElementById("userSelect").value;
+      const name = document.getElementById("userName").value.trim();
       if (!name) {
-        alert("กรุณาเลือกชื่อผู้ใช้ก่อน");
+        alert("กรุณาพิมพ์ชื่อผู้ใช้ก่อน");
         return;
       }
 
       try {
-        const res = await fetch(`${API_URL}/history/${name}`);
+        const res = await fetch(`${API_URL}/history/${encodeURIComponent(name)}`);
+        if (!res.ok) {
+          alert("❌ ไม่พบข้อมูลของผู้ใช้ '" + name + "'");
+          throw new Error("ไม่พบข้อมูล");
+        }
+
         const data = await res.json();
+        console.log("📄 ข้อมูลประวัติ:", data);
 
         document.getElementById("historyTable").classList.remove("hidden");
         const tbody = document.getElementById("historyBody");
@@ -107,12 +96,9 @@
           tbody.innerHTML += row;
         });
 
-        // คำนวณค่าเฉลี่ยหมวดรายจ่าย
+        // ใช้ record ล่าสุดสร้างกราฟ
         const last = data.records[data.records.length - 1];
-        const res2 = await fetch(`${API_URL}/history/${name}`);
-        const all = await res2.json();
-
-        if (last) drawCharts(name, last, all.records);
+        if (last) drawCharts(name, last, data.records);
       } catch (err) {
         console.error("โหลดประวัติผู้ใช้ล้มเหลว:", err);
       }
@@ -120,28 +106,29 @@
 
     // วาดกราฟ
     function drawCharts(name, lastRecord, records) {
-      // Pie chart
-      const expenses = JSON.parse(lastRecord.detail || "{}");
-      const labels = Object.keys(expenses);
-      const values = Object.values(expenses);
-
       const ctx1 = document.getElementById("pieChart").getContext("2d");
+      const ctx2 = document.getElementById("barChart").getContext("2d");
+
+      const expenses = {
+        บ้าน: lastRecord.house || 0,
+        รถ: lastRecord.car || 0,
+        อาหาร: lastRecord.food || 0,
+        ออม: lastRecord.saving || 0,
+        ท่องเที่ยว: lastRecord.travel || 0
+      };
+
       new Chart(ctx1, {
         type: "pie",
         data: {
-          labels: labels,
+          labels: Object.keys(expenses),
           datasets: [{
-            data: values,
+            data: Object.values(expenses),
             backgroundColor: ["#60a5fa", "#34d399", "#fbbf24", "#f87171", "#a78bfa"]
           }]
         },
-        options: {
-          plugins: { legend: { position: "bottom" } }
-        }
+        options: { plugins: { legend: { position: "bottom" } } }
       });
 
-      // Bar chart
-      const ctx2 = document.getElementById("barChart").getContext("2d");
       new Chart(ctx2, {
         type: "bar",
         data: {
@@ -162,14 +149,10 @@
         options: {
           responsive: true,
           plugins: { legend: { position: "bottom" } },
-          scales: {
-            y: { beginAtZero: true, title: { display: true, text: "จำนวนเงิน (บาท)" } }
-          }
+          scales: { y: { beginAtZero: true, title: { display: true, text: "บาท" } } }
         }
       });
     }
-
-    loadUserList();
   </script>
 </body>
 </html>

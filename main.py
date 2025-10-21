@@ -1,44 +1,37 @@
-# ============================================
-# main.py — Finance Simulation API (SimPy Improved with Smart Advice + Dashboard Summary)
-# ============================================
+# ======================================================
+# main.py — เวอร์ชันซ่อมฐานข้อมูล + รองรับ summary แน่นอน
+# ======================================================
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime
+from pydantic import BaseModel
 import simpy, random
-
 from database import SessionLocal, Base, engine, User, FinanceRecord
 
-# ----------------------------
-# ✅ Database Setup
-# ----------------------------
+# ======================================================
+# ✅ Database setup
+# ======================================================
 Base.metadata.create_all(bind=engine)
 print("✅ Database checked and ready (finance.db)")
 
-app = FastAPI(title="Finance Simulation API (Smart Advice)", version="3.4")
+app = FastAPI(title="Finance Simulation API", version="5.0")
 
-# ----------------------------
+# ======================================================
 # 🌐 CORS
-# ----------------------------
-origins = [
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-    "http://127.0.0.1:8001"
-]
-
+# ======================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ----------------------------
-# ⚙️ Database Dependency
-# ----------------------------
+# ======================================================
+# ⚙️ Dependency
+# ======================================================
 def get_db():
     db = SessionLocal()
     try:
@@ -46,9 +39,9 @@ def get_db():
     finally:
         db.close()
 
-# ----------------------------
+# ======================================================
 # 📥 Models
-# ----------------------------
+# ======================================================
 class ExpenseInput(BaseModel):
     house: float
     car: float
@@ -61,47 +54,34 @@ class SimulationInput(BaseModel):
     income: float
     expenses: ExpenseInput
 
-# ----------------------------
-# 💡 Smart Financial Advice
-# ----------------------------
-def generate_advice(income: float, expenses: dict):
+# ======================================================
+# 💡 Smart advice
+# ======================================================
+def generate_advice(income, expenses):
     advice = []
-    total_expense = sum(expenses.values())
+    total = sum(expenses.values())
     saving = expenses.get("saving", 0)
 
-    # 1️⃣ รายจ่ายมากกว่ารายรับ
-    if total_expense > income:
-        advice.append("❌ รายจ่ายมากกว่ารายรับ ควรลดค่าใช้จ่ายบางส่วนเพื่อป้องกันการขาดสภาพคล่องทางการเงิน")
+    if total > income:
+        advice.append("❌ รายจ่ายมากกว่ารายรับ ควรลดค่าใช้จ่ายบางส่วน")
+    if saving < 0.1 * income:
+        advice.append("💡 ควรออมอย่างน้อย 10% ของรายได้")
+    if expenses["house"] > 0.35 * income:
+        advice.append("🏠 ค่าบ้านสูงเกินไป ควรลดหรือรีไฟแนนซ์")
+    if expenses["car"] > 0.2 * income:
+        advice.append("🚗 ค่าเดินทางสูง แนะนำใช้ขนส่งสาธารณะ")
+    if expenses["food"] > 0.3 * income:
+        advice.append("🍛 ค่าอาหารสูง แนะนำทำอาหารเอง")
+    if expenses["travel"] > 10000:
+        advice.append("✈️ ค่าเที่ยวสูงเกินไป ควรจำกัดงบ")
 
-    # 2️⃣ เงินออม < 10% ของรายได้
-    if saving < (0.10 * income):
-        advice.append("💡 ควรเพิ่มเงินออมอย่างน้อย 10% ของรายได้ต่อเดือน เพื่อสร้างความมั่นคง")
-
-    # 3️⃣ ค่าบ้าน > 35% หรือ > 17,500
-    if expenses.get("house", 0) > 0.35 * income or expenses.get("house", 0) > 17500:
-        advice.append("🏠 ค่าที่อยู่อาศัยสูงเกินไป ควรลดค่าเช่าหรือรีไฟแนนซ์บ้าน")
-
-    # 4️⃣ ค่าเดินทาง > 20% หรือ > 3,000
-    if expenses.get("car", 0) > 0.20 * income or expenses.get("car", 0) > 3000:
-        advice.append("🚗 ค่าเดินทางสูงเกินไป แนะนำใช้ขนส่งสาธารณะหรือปรับเส้นทางเพื่อลดค่าน้ำมัน")
-
-    # 5️⃣ ค่าอาหาร > 30% หรือ > 5,000
-    if expenses.get("food", 0) > 0.30 * income or expenses.get("food", 0) > 5000:
-        advice.append("🍛 ค่าอาหารเกินเกณฑ์ แนะนำทำอาหารกินเองหรือลดการสั่งอาหารเดลิเวอรี่")
-
-    # 6️⃣ ค่าเที่ยว > 10,000
-    if expenses.get("travel", 0) > 10000:
-        advice.append("✈️ ค่าใช้จ่ายท่องเที่ยวสูงเกินไป ควรจำกัดงบประมาณในแต่ละเดือน")
-
-    # ✅ ถ้าไม่มีปัญหา
     if not advice:
         advice.append("✅ เยี่ยมมาก! การใช้จ่ายของคุณสมดุลและมีการออมเหมาะสม 👍")
-
     return " ".join(advice)
 
-# ----------------------------
-# ⚙️ SimPy Simulation (12 เดือน)
-# ----------------------------
+# ======================================================
+# ⚙️ Simulation 12 เดือน
+# ======================================================
 def simulate_with_simpy(income, expenses):
     env = simpy.Environment()
     results = []
@@ -124,9 +104,9 @@ def simulate_with_simpy(income, expenses):
     env.run()
     return results
 
-# ----------------------------
-# 🚀 API: /simulate
-# ----------------------------
+# ======================================================
+# 🚀 /simulate — บันทึกข้อมูลจำลอง
+# ======================================================
 @app.post("/simulate")
 def simulate(data: SimulationInput, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.name == data.name).first()
@@ -138,11 +118,11 @@ def simulate(data: SimulationInput, db: Session = Depends(get_db)):
 
     income = data.income
     expenses = data.expenses.dict()
+    sim_result = simulate_with_simpy(income, expenses)
 
-    monthly_result = simulate_with_simpy(income, expenses)
-    total_expense = sum(expenses.values())
-    monthly_balance = income - total_expense
-    total_saving = monthly_balance * 12
+    total_exp = sum(expenses.values())
+    balance = income - total_exp
+    total_saving = balance * 12
     advice = generate_advice(income, expenses)
 
     record = FinanceRecord(
@@ -154,11 +134,11 @@ def simulate(data: SimulationInput, db: Session = Depends(get_db)):
         food=expenses["food"],
         saving=expenses["saving"],
         travel=expenses["travel"],
-        total_expense=total_expense,
-        balance=monthly_balance,
+        total_expense=total_exp,
+        balance=balance,
         cumulative_saving=total_saving,
         created_at=datetime.now(),
-        detail=str(advice)
+        detail=advice
     )
     db.add(record)
     db.commit()
@@ -167,43 +147,71 @@ def simulate(data: SimulationInput, db: Session = Depends(get_db)):
         "summary": {
             "name": user.name,
             "monthly_income": income,
-            "monthly_expense": total_expense,
-            "monthly_balance": monthly_balance,
+            "monthly_expense": total_exp,
+            "monthly_balance": balance,
             "total_saving_12m": total_saving,
             "expenses": expenses,
             "advice": advice
         },
-        "simulation_result": monthly_result
+        "simulation_result": sim_result
     })
 
-# ----------------------------
-# 🕒 API: /history/{name}
-# ----------------------------
+# ======================================================
+# 🧾 /history/{name} — ดึงประวัติผู้ใช้
+# ======================================================
 @app.get("/history/{name}")
 def get_history(name: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.name == name).first()
+
+    # ถ้ายังไม่มี user แต่มี record ให้สร้าง user ใหม่จาก record
     if not user:
-        raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้นี้")
+        record = db.query(FinanceRecord).first()
+        if record:
+            new_user = User(name=name)
+            db.add(new_user)
+            db.commit()
+            db.refresh(new_user)
+            record.user_id = new_user.id
+            db.commit()
+            user = new_user
+        else:
+            raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้")
 
     records = db.query(FinanceRecord).filter(FinanceRecord.user_id == user.id).all()
-    data = [{
-        "month": r.month,
-        "income": r.income,
-        "total_expense": r.total_expense,
-        "balance": r.balance,
-        "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-        "detail": r.detail
-    } for r in records]
+    if not records:
+        raise HTTPException(status_code=404, detail="ไม่พบข้อมูลการจำลอง")
 
-    return JSONResponse(content={"user": user.name, "records": data})
+    return {
+        "user": user.name,
+        "records": [{
+            "month": r.month,
+            "income": r.income,
+            "total_expense": r.total_expense,
+            "balance": r.balance,
+            "detail": r.detail,
+            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        } for r in records]
+    }
 
-# ----------------------------
-# 🧭 API: รายชื่อผู้ใช้ทั้งหมด + คำแนะนำล่าสุด
-# ----------------------------
+# ======================================================
+# 🧭 /history/summary — แสดงรายชื่อผู้ใช้ + คำแนะนำล่าสุด
+# ======================================================
 @app.get("/history/summary")
-def get_all_users(db: Session = Depends(get_db)):
+def get_summary(db: Session = Depends(get_db)):
+    # 🔧 ซ่อมข้อมูล orphan record (ไม่มี user_id)
+    orphan_records = db.query(FinanceRecord).filter(FinanceRecord.user_id == None).all()
+    for rec in orphan_records:
+        # ถ้าไม่มี user ให้สร้างจากชื่อ dummy
+        dummy_user = User(name="ผู้ใช้ไม่ระบุ")
+        db.add(dummy_user)
+        db.commit()
+        db.refresh(dummy_user)
+        rec.user_id = dummy_user.id
+        db.commit()
+
     users = db.query(User).all()
-    result = []
+    user_names, details = [], []
+
     for u in users:
         last_record = (
             db.query(FinanceRecord)
@@ -211,15 +219,32 @@ def get_all_users(db: Session = Depends(get_db)):
             .order_by(FinanceRecord.created_at.desc())
             .first()
         )
-        result.append({
-            "name": u.name,
-            "latest_advice": last_record.detail if last_record else "ยังไม่มีข้อมูลจำลอง"
-        })
-    return {"users": [r["name"] for r in result], "details": result}
+        if last_record:
+            user_names.append(u.name)
+            details.append({
+                "name": u.name,
+                "latest_advice": last_record.detail or "ยังไม่มีคำแนะนำ"
+            })
 
-# ----------------------------
-# 🌍 Root Endpoint
-# ----------------------------
+    if not user_names:
+        raise HTTPException(status_code=404, detail="ยังไม่มีข้อมูลในระบบ")
+
+    return {"users": user_names, "details": details}
+
+# ======================================================
+# 🌍 Root
+# ======================================================
 @app.get("/")
 def root():
-    return JSONResponse(content={"message": "💰 Finance Simulation API (Smart Advice + Summary) is running successfully!"})
+    return {"message": "💰 Finance Simulation API is running successfully!"}
+
+# ======================================================
+# 🧩 Debug Route
+# ======================================================
+@app.on_event("startup")
+async def show_routes():
+    print("\n📍 Loaded Routes:")
+    for route in app.routes:
+        if hasattr(route, "path"):
+            print(f"➡️ {route.path}")
+    print("===================================\n")
