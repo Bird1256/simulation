@@ -1,0 +1,65 @@
+/* ============================================
+   style.css — ตกแต่งหน้าเว็บจำลองการเงิน
+   ============================================ */
+
+body {
+  font-family: 'Noto Sans Thai', sans-serif;
+  background-color: #f0f7ff;
+}
+
+/* อินพุต */
+input {
+  transition: all 0.2s ease-in-out;
+}
+
+input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  outline: none;
+}
+
+/* ปุ่ม */
+button {
+  transition: all 0.2s ease-in-out;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ตาราง */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  border: 1px solid #e5e7eb;
+}
+
+th {
+  background-color: #f1f5f9;
+  font-weight: 600;
+}
+
+tr:nth-child(even) td {
+  background-color: #f9fafb;
+}
+
+tr:hover td {
+  background-color: #eef2ff;
+}
+
+/* สีข้อความ */
+.text-green-600 { color: #16a34a; }
+.text-red-600 { color: #dc2626; }
+.text-blue-700 { color: #1d4ed8; }
+
+/* กล่องผลลัพธ์ */
+.result-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}

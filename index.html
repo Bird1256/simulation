@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>💰 ระบบจำลองการเงินส่วนบุคคล</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="script.js"></script>
+</head>
+
+<body class="bg-gray-50 min-h-screen text-gray-800">
+  <div class="max-w-4xl mx-auto py-10 px-5">
+    <h1 class="text-3xl font-bold text-center text-blue-700 mb-8">
+      💸 ระบบจำลองการเงินส่วนบุคคล (SimPy)
+    </h1>
+
+    <!-- 🧾 ฟอร์มกรอกข้อมูล -->
+    <div id="formSim" class="bg-white rounded-2xl shadow p-6 mb-10">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="font-semibold">ชื่อผู้ใช้</label>
+          <input id="name" type="text" placeholder="เช่น นายอรรถพล แซ่ตั้ง"
+            class="border border-gray-300 rounded-lg w-full p-2 mt-1" />
+        </div>
+
+        <div>
+          <label class="font-semibold">รายได้ต่อเดือน (บาท)</label>
+          <input id="income" type="number" min="0" placeholder="เช่น 50000"
+            class="border border-gray-300 rounded-lg w-full p-2 mt-1" />
+        </div>
+      </div>
+
+      <h3 class="mt-6 mb-2 font-semibold text-blue-600">📊 รายจ่ายต่อเดือน</h3>
+      <div class="grid md:grid-cols-3 gap-3">
+        <div><label>🏠 บ้าน</label><input id="house" type="number" min="0" class="border rounded-md w-full p-2" /></div>
+        <div><label>🚗 รถ</label><input id="car" type="number" min="0" class="border rounded-md w-full p-2" /></div>
+        <div><label>🍜 อาหาร</label><input id="food" type="number" min="0" class="border rounded-md w-full p-2" /></div>
+        <div><label>💰 เงินออม</label><input id="saving" type="number" min="0" class="border rounded-md w-full p-2" /></div>
+        <div><label>✈️ ท่องเที่ยว</label><input id="travel" type="number" min="0" class="border rounded-md w-full p-2" /></div>
+      </div>
+
+      <!-- ✅ ปุ่มทั้งหมด type="button" เพื่อไม่ให้ reload -->
+      <div class="mt-6 flex flex-wrap gap-3 justify-center">
+        <button id="btnSim" type="button"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-lg shadow">
+          ▶️ จำลองการเงิน
+        </button>
+
+        <button id="btnHistory" type="button"
+          class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold px-5 py-2 rounded-lg shadow">
+          📚 ดูประวัติ
+        </button>
+
+        <a href="dashboard.html"
+          class="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-5 py-2 rounded-lg shadow">
+          📊 ไปยัง Dashboard
+        </a>
+      </div>
+    </div>
+
+    <!-- 📈 ผลลัพธ์จำลอง -->
+    <div id="resultWrap" class="hidden bg-white rounded-2xl shadow p-6 mb-10 transition-all duration-300">
+      <h2 class="text-2xl font-semibold text-blue-600 mb-4">📈 ผลการจำลองการเงิน</h2>
+      <div id="summary" class="text-lg leading-relaxed mb-6"></div>
+
+      <h3 class="text-xl font-semibold mb-2 text-gray-700">📋 รายละเอียดรายจ่ายต่อเดือน</h3>
+      <table class="w-full border-collapse mb-6">
+        <thead class="bg-blue-100">
+          <tr>
+            <th class="border px-3 py-2">หมวดรายจ่าย</th>
+            <th class="border px-3 py-2">จำนวน (บาท)</th>
+          </tr>
+        </thead>
+        <tbody id="breakdownTbody"></tbody>
+      </table>
+
+      <h3 class="text-xl font-semibold mb-2 text-gray-700">🗓 จำลองเงินเก็บ 12 เดือน</h3>
+      <table class="w-full border-collapse mb-6">
+        <thead class="bg-green-100">
+          <tr>
+            <th class="border px-3 py-2">เดือน</th>
+            <th class="border px-3 py-2">คงเหลือ (บาท)</th>
+            <th class="border px-3 py-2">สะสมรวม (บาท)</th>
+          </tr>
+        </thead>
+        <tbody id="monthlyTbody"></tbody>
+      </table>
+
+      <!-- ✅ แสดงคำแนะนำ -->
+      <div id="adviceBox" class="mt-4 bg-blue-50 border border-blue-300 rounded-xl shadow p-4">
+        <h3 class="text-lg font-semibold text-blue-700 mb-2">💡 คำแนะนำทางการเงิน</h3>
+        <p id="adviceText" class="text-gray-700"></p>
+      </div>
+    </div>
+
+    <!-- 🕒 ประวัติผู้ใช้ -->
+    <div id="historyWrap" class="hidden bg-white rounded-2xl shadow p-6 mb-10 transition-all duration-300">
+      <h2 class="text-2xl font-semibold text-yellow-600 mb-4">📚 ประวัติการจำลอง</h2>
+      <table class="w-full border-collapse">
+        <thead class="bg-yellow-100">
+          <tr>
+            <th class="border px-3 py-2">ครั้งที่</th>
+            <th class="border px-3 py-2">รายได้ (บาท)</th>
+            <th class="border px-3 py-2">รายจ่าย (บาท)</th>
+            <th class="border px-3 py-2">คงเหลือ (บาท)</th>
+            <th class="border px-3 py-2">วันที่บันทึก</th>
+          </tr>
+        </thead>
+        <tbody id="historyTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
