@@ -1,5 +1,5 @@
 # ============================================
-# database.py — SQLite Database Schema (ใช้งานจริง)
+# 🗃️ database.py — Database Schema (SQLAlchemy ORM)
 # ============================================
 
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey
@@ -24,7 +24,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
 
-    records = relationship("FinanceRecord", back_populates="user")
+    # สัมพันธ์กับตารางการเงิน
+    records = relationship("FinanceRecord", back_populates="user", cascade="all, delete")
 
 # ----------------------------
 # 💰 ตารางบันทึกรายรับรายจ่าย (FinanceRecord)
@@ -34,7 +35,7 @@ class FinanceRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    month = Column(String)
+    month = Column(String, default="-")
     income = Column(Float)
     house = Column(Float)
     car = Column(Float)
@@ -46,17 +47,18 @@ class FinanceRecord(Base):
     cumulative_saving = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.now)
 
-    # ✅ เพิ่มคอลัมน์นี้
+    # 🔍 เพิ่ม detail เก็บ JSON ของค่าใช้จ่ายรายหมวด
     detail = Column(String, nullable=True)
 
+    # สัมพันธ์กับตารางผู้ใช้
     user = relationship("User", back_populates="records")
 
 # ----------------------------
-# 🧱 สร้างตาราง
+# 🧱 ฟังก์ชันสร้างตาราง
 # ----------------------------
 def init_db():
     Base.metadata.create_all(bind=engine)
-    print("✅ Database & Tables created successfully: finance.db")
+    print("✅ Database initialized successfully (finance.db)")
 
 if __name__ == "__main__":
     init_db()

@@ -1,5 +1,8 @@
 # ================================================
-# 💰 Finance Simulation Backend + 🤖 AI Advisor + 🏠 Location Fee (ตามที่อยู่)
+# 💰 Finance Simulation Backend (v2.3)
+# ✅ รองรับ: อยู่บ้าน / ใกล้ / ไกลมหาวิทยาลัย
+# ✅ บันทึกลงฐานข้อมูล finance.db
+# ✅ AI Advisor + Location Factor + History
 # ================================================
 
 from fastapi import FastAPI
@@ -20,6 +23,9 @@ app = FastAPI(
     version="2.3"
 )
 
+# -----------------------------
+# ⚙️ CORS Config
+# -----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,7 +44,7 @@ class SimulationInput(BaseModel):
     location: str
 
 # -----------------------------
-# 🗃️ ตั้งค่า Database
+# 🗃️ Database Setup (SQLite)
 # -----------------------------
 DB_PATH = "finance.db"
 
@@ -56,16 +62,13 @@ def init_db():
             created_at TEXT
         )
     """)
-    cols = [r[1] for r in c.execute("PRAGMA table_info(simulations);").fetchall()]
-    if "expenses_json" not in cols:
-        c.execute("ALTER TABLE simulations ADD COLUMN expenses_json TEXT;")
     conn.commit()
     conn.close()
 
 init_db()
 
 # -----------------------------
-# 🧠 ตัวช่วยของ AI Advisor
+# 🧠 ตัวช่วย AI Advisor
 # -----------------------------
 EXP_KEYS = ["house", "car", "food", "saving", "travel"]
 
@@ -82,11 +85,13 @@ def fetch_history_df():
     if rows.empty:
         for k in EXP_KEYS: rows[k] = 0.0
         return rows
+
     def parse_exp(js):
         if not js: return {k: 0.0 for k in EXP_KEYS}
         try: d = json.loads(js)
         except: d = {}
         return {k: _safe_num(d.get(k, 0.0)) for k in EXP_KEYS}
+
     exp_df = rows["expenses_json"].apply(parse_exp).apply(pd.Series)
     rows = pd.concat([rows.drop(columns=["expenses_json"]), exp_df], axis=1)
     eps = 1e-9
@@ -99,11 +104,13 @@ def rule_based_flags(income, expenses):
     inc = max(income, 0.0)
     eps = 1e-9
     ratios = {k: _safe_num(expenses.get(k, 0.0)) / (inc + eps) for k in EXP_KEYS}
+
     if ratios["food"] > 0.40: tips.append("🍜 ค่าอาหารเกิน 40% ของรายได้")
     if ratios["car"] > 0.20: tips.append("🚌 ค่าเดินทางเกิน 20% ของรายได้")
     if ratios["house"] > 0.30: tips.append("🏠 ค่าที่พักเกิน 30% ของรายได้")
     if ratios["saving"] < 0.10: tips.append("💵 เงินออมต่ำกว่า 10% ของรายได้")
     if ratios["travel"] > 0.15: tips.append("✈️ ท่องเที่ยวเกิน 15% ของรายได้")
+
     total_exp = sum(_safe_num(expenses.get(k, 0.0)) for k in EXP_KEYS)
     if total_exp > income: tips.append("⚠️ รายจ่ายมากกว่ารายได้")
     return tips
@@ -114,6 +121,7 @@ def kmeans_advisor(current_vector, history_df, k=3):
     df = df[df["income"] > 0]
     if df.shape[0] < 8:
         return {"enabled": False, "peer_tips": ["ข้อมูลย้อนหลังน้อยเกินไป"]}
+
     X = df[ratio_cols].fillna(0.0).to_numpy()
     k = max(2, min(k, X.shape[0] // 2))
     km = KMeans(n_clusters=k, n_init=10, random_state=42)
@@ -141,7 +149,7 @@ def build_advisor(income, expenses):
     return " • ".join(tips) if tips else "การใช้จ่ายอยู่ในเกณฑ์เหมาะสม 👍"
 
 # -----------------------------
-# 📊 ฟังก์ชันจำลอง
+# 📊 ฟังก์ชันจำลองหลัก
 # -----------------------------
 @app.post("/simulate")
 async def simulate(data: SimulationInput):
@@ -163,6 +171,9 @@ async def simulate(data: SimulationInput):
 
     advice = build_advisor(income, expenses)
 
+    # -----------------------------
+    # 🧾 บันทึกลงฐานข้อมูล
+    # -----------------------------
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(
@@ -173,6 +184,9 @@ async def simulate(data: SimulationInput):
     conn.commit()
     conn.close()
 
+    # -----------------------------
+    # 📅 สร้างข้อมูลจำลอง 12 เดือน
+    # -----------------------------
     months = []
     cumulative = 0
     for i in range(1, 13):
@@ -198,7 +212,7 @@ async def simulate(data: SimulationInput):
     }
 
 # -----------------------------
-# 🧾 ประวัติย้อนหลัง
+# 🧾 API: ประวัติย้อนหลัง
 # -----------------------------
 @app.get("/history/{name}")
 async def get_history(name: str):

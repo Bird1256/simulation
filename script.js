@@ -1,5 +1,5 @@
 // ================================
-// 💰 Simulation Frontend Script (Final Version)
+// 💰 Simulation Frontend Script (Final Full Version with Graphs)
 // ================================
 
 const API_BASE = "http://127.0.0.1:8001";
@@ -128,6 +128,51 @@ function renderResult(data, location) {
   // 💡 ข้อเสนอแนะทางการเงิน
   document.getElementById("adviceBox").classList.remove("hidden");
   document.getElementById("adviceText").textContent = s.advice || "ไม่มีคำแนะนำเพิ่มเติม";
+
+  // --------------------------
+  // 💰 สร้างกราฟ รายได้ - รายจ่าย
+  // --------------------------
+  if (document.getElementById("incomeExpenseChart")) {
+    const ctx = document.getElementById("incomeExpenseChart").getContext("2d");
+
+    // ล้างกราฟเก่าก่อน (กันซ้อน)
+    if (window.incomeExpenseChart) window.incomeExpenseChart.destroy();
+
+    window.incomeExpenseChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: ["รายได้", "รายจ่ายรวม"],
+        datasets: [{
+          label: "จำนวนเงิน (บาท)",
+          data: [s.monthly_income, s.monthly_expense],
+          backgroundColor: ["#16a34a", "#ef4444"]
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          title: {
+            display: true,
+            text: "💰 รายได้ - รายจ่ายต่อเดือน",
+            font: { size: 16 }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: val => val.toLocaleString("th-TH")
+            },
+            title: {
+              display: true,
+              text: "บาท"
+            }
+          }
+        }
+      }
+    });
+  }
 
   // เลื่อนลงมาแสดงผลลัพธ์
   resultWrap.scrollIntoView({ behavior: "smooth" });
