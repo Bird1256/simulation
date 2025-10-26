@@ -1,26 +1,25 @@
-# ======================================================
-# main.py — เวอร์ชันซ่อมฐานข้อมูล + รองรับ summary แน่นอน
-# ======================================================
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from datetime import datetime
+# ================================================
+# 💰 Finance Simulation Backend + 🤖 AI Advisor + 🏠 Location Fee (ตามที่อยู่)
+# ================================================
+
+from fastapi import FastAPI
 from pydantic import BaseModel
-import simpy, random
-from database import SessionLocal, Base, engine, User, FinanceRecord
+from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
+import sqlite3, json, warnings
+import numpy as np
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.exceptions import ConvergenceWarning
 
-# ======================================================
-# ✅ Database setup
-# ======================================================
-Base.metadata.create_all(bind=engine)
-print("✅ Database checked and ready (finance.db)")
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
-app = FastAPI(title="Finance Simulation API", version="5.0")
+app = FastAPI(
+    title="Student Financial Simulation API (AI Advisor + Location Fee)",
+    description="จำลองการเงินนักศึกษา + วิเคราะห์พฤติกรรมการใช้เงินด้วย AI + ค่าที่พักคำนวณตามระยะทางจากมหาวิทยาลัย",
+    version="2.3"
+)
 
-# ======================================================
-# 🌐 CORS
-# ======================================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,222 +28,191 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ======================================================
-# ⚙️ Dependency
-# ======================================================
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# ======================================================
-# 📥 Models
-# ======================================================
-class ExpenseInput(BaseModel):
-    house: float
-    car: float
-    food: float
-    saving: float
-    travel: float
-
+# -----------------------------
+# 📦 Model สำหรับข้อมูลขาเข้า
+# -----------------------------
 class SimulationInput(BaseModel):
     name: str
     income: float
-    expenses: ExpenseInput
+    expenses: dict
+    location: str
 
-# ======================================================
-# 💡 Smart advice
-# ======================================================
-def generate_advice(income, expenses):
-    advice = []
-    total = sum(expenses.values())
-    saving = expenses.get("saving", 0)
+# -----------------------------
+# 🗃️ ตั้งค่า Database
+# -----------------------------
+DB_PATH = "finance.db"
 
-    if total > income:
-        advice.append("❌ รายจ่ายมากกว่ารายรับ ควรลดค่าใช้จ่ายบางส่วน")
-    if saving < 0.1 * income:
-        advice.append("💡 ควรออมอย่างน้อย 10% ของรายได้")
-    if expenses["house"] > 0.35 * income:
-        advice.append("🏠 ค่าบ้านสูงเกินไป ควรลดหรือรีไฟแนนซ์")
-    if expenses["car"] > 0.2 * income:
-        advice.append("🚗 ค่าเดินทางสูง แนะนำใช้ขนส่งสาธารณะ")
-    if expenses["food"] > 0.3 * income:
-        advice.append("🍛 ค่าอาหารสูง แนะนำทำอาหารเอง")
-    if expenses["travel"] > 10000:
-        advice.append("✈️ ค่าเที่ยวสูงเกินไป ควรจำกัดงบ")
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS simulations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            income REAL,
+            total_expense REAL,
+            balance REAL,
+            expenses_json TEXT,
+            created_at TEXT
+        )
+    """)
+    cols = [r[1] for r in c.execute("PRAGMA table_info(simulations);").fetchall()]
+    if "expenses_json" not in cols:
+        c.execute("ALTER TABLE simulations ADD COLUMN expenses_json TEXT;")
+    conn.commit()
+    conn.close()
 
-    if not advice:
-        advice.append("✅ เยี่ยมมาก! การใช้จ่ายของคุณสมดุลและมีการออมเหมาะสม 👍")
-    return " ".join(advice)
+init_db()
 
-# ======================================================
-# ⚙️ Simulation 12 เดือน
-# ======================================================
-def simulate_with_simpy(income, expenses):
-    env = simpy.Environment()
-    results = []
+# -----------------------------
+# 🧠 ตัวช่วยของ AI Advisor
+# -----------------------------
+EXP_KEYS = ["house", "car", "food", "saving", "travel"]
 
-    def monthly_process(env, months, income, expenses):
-        cumulative = 0
-        for i in range(1, months + 1):
-            yield env.timeout(0.1)
-            monthly_expense = sum(expenses.values())
-            monthly_income = income + random.uniform(-500, 1000)
-            monthly_balance = monthly_income - monthly_expense
-            cumulative += monthly_balance
-            results.append({
-                "month": f"เดือนที่ {i}",
-                "balance": round(monthly_balance, 2),
-                "cumulative_saving": round(cumulative, 2)
-            })
+def _safe_num(x):
+    try:
+        return float(x) if x is not None else 0.0
+    except:
+        return 0.0
 
-    env.process(monthly_process(env, 12, income, expenses))
-    env.run()
-    return results
+def fetch_history_df():
+    conn = sqlite3.connect(DB_PATH)
+    rows = pd.read_sql_query("SELECT name, income, total_expense, balance, expenses_json, created_at FROM simulations", conn)
+    conn.close()
+    if rows.empty:
+        for k in EXP_KEYS: rows[k] = 0.0
+        return rows
+    def parse_exp(js):
+        if not js: return {k: 0.0 for k in EXP_KEYS}
+        try: d = json.loads(js)
+        except: d = {}
+        return {k: _safe_num(d.get(k, 0.0)) for k in EXP_KEYS}
+    exp_df = rows["expenses_json"].apply(parse_exp).apply(pd.Series)
+    rows = pd.concat([rows.drop(columns=["expenses_json"]), exp_df], axis=1)
+    eps = 1e-9
+    for k in EXP_KEYS:
+        rows[f"ratio_{k}"] = rows[k] / (rows["income"] + eps)
+    return rows
 
-# ======================================================
-# 🚀 /simulate — บันทึกข้อมูลจำลอง
-# ======================================================
+def rule_based_flags(income, expenses):
+    tips = []
+    inc = max(income, 0.0)
+    eps = 1e-9
+    ratios = {k: _safe_num(expenses.get(k, 0.0)) / (inc + eps) for k in EXP_KEYS}
+    if ratios["food"] > 0.40: tips.append("🍜 ค่าอาหารเกิน 40% ของรายได้")
+    if ratios["car"] > 0.20: tips.append("🚌 ค่าเดินทางเกิน 20% ของรายได้")
+    if ratios["house"] > 0.30: tips.append("🏠 ค่าที่พักเกิน 30% ของรายได้")
+    if ratios["saving"] < 0.10: tips.append("💵 เงินออมต่ำกว่า 10% ของรายได้")
+    if ratios["travel"] > 0.15: tips.append("✈️ ท่องเที่ยวเกิน 15% ของรายได้")
+    total_exp = sum(_safe_num(expenses.get(k, 0.0)) for k in EXP_KEYS)
+    if total_exp > income: tips.append("⚠️ รายจ่ายมากกว่ารายได้")
+    return tips
+
+def kmeans_advisor(current_vector, history_df, k=3):
+    ratio_cols = [f"ratio_{k}" for k in EXP_KEYS]
+    df = history_df.copy()
+    df = df[df["income"] > 0]
+    if df.shape[0] < 8:
+        return {"enabled": False, "peer_tips": ["ข้อมูลย้อนหลังน้อยเกินไป"]}
+    X = df[ratio_cols].fillna(0.0).to_numpy()
+    k = max(2, min(k, X.shape[0] // 2))
+    km = KMeans(n_clusters=k, n_init=10, random_state=42)
+    km.fit(X)
+    cur = np.array(current_vector).reshape(1, -1)
+    label = int(km.predict(cur)[0])
+    df["cluster"] = km.labels_
+    peer = df[df["cluster"] == label]
+    med = peer[ratio_cols].median().to_dict()
+    peer_tips = []
+    for i, key in enumerate(EXP_KEYS):
+        cur_ratio = float(current_vector[i])
+        peer_med = float(med.get(f"ratio_{key}", 0.0))
+        if cur_ratio - peer_med > 0.10:
+            peer_tips.append(f"📌 หมวด {key} สูงกว่าค่าเฉลี่ยเพื่อน")
+    return {"enabled": True, "peer_tips": peer_tips or ["ใกล้เคียงเพื่อนแล้ว 👍"]}
+
+def build_advisor(income, expenses):
+    rb = rule_based_flags(income, expenses)
+    hist = fetch_history_df()
+    eps = 1e-9
+    ratios_vec = [_safe_num(expenses.get(k, 0.0)) / (income + eps) for k in EXP_KEYS]
+    km_res = kmeans_advisor(ratios_vec, hist)
+    tips = rb + km_res.get("peer_tips", [])
+    return " • ".join(tips) if tips else "การใช้จ่ายอยู่ในเกณฑ์เหมาะสม 👍"
+
+# -----------------------------
+# 📊 ฟังก์ชันจำลอง
+# -----------------------------
 @app.post("/simulate")
-def simulate(data: SimulationInput, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.name == data.name).first()
-    if not user:
-        user = User(name=data.name)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
+async def simulate(data: SimulationInput):
     income = data.income
-    expenses = data.expenses.dict()
-    sim_result = simulate_with_simpy(income, expenses)
+    expenses = {k: _safe_num(data.expenses.get(k, 0.0)) for k in EXP_KEYS}
+    location = data.location.strip()
 
-    total_exp = sum(expenses.values())
-    balance = income - total_exp
-    total_saving = balance * 12
-    advice = generate_advice(income, expenses)
+    # ✅ เงื่อนไขค่าที่พักตามประเภทที่อยู่
+    if location == "อยู่บ้าน":
+        location_factor = 0
+    elif location in ["ใกล้มหาวิทยาลัย", "ไกลมหาวิทยาลัย"]:
+        location_factor = 1500
+    else:
+        location_factor = 0  # กันพลาด
 
-    record = FinanceRecord(
-        user_id=user.id,
-        month=datetime.now().strftime("%Y-%m"),
-        income=income,
-        house=expenses["house"],
-        car=expenses["car"],
-        food=expenses["food"],
-        saving=expenses["saving"],
-        travel=expenses["travel"],
-        total_expense=total_exp,
-        balance=balance,
-        cumulative_saving=total_saving,
-        created_at=datetime.now(),
-        detail=advice
+    total_expense = sum(expenses.values()) + location_factor
+    balance = income - total_expense
+    total_saving_12m = balance * 12 if balance > 0 else 0
+
+    advice = build_advisor(income, expenses)
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO simulations (name, income, total_expense, balance, expenses_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (data.name, income, total_expense, balance, json.dumps(expenses, ensure_ascii=False),
+         datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     )
-    db.add(record)
-    db.commit()
+    conn.commit()
+    conn.close()
 
-    return JSONResponse(content={
+    months = []
+    cumulative = 0
+    for i in range(1, 13):
+        cumulative += balance
+        months.append({
+            "month": f"เดือน {i}",
+            "balance": balance,
+            "cumulative_saving": max(cumulative, 0)
+        })
+
+    return {
         "summary": {
-            "name": user.name,
+            "name": data.name,
+            "location": location,
             "monthly_income": income,
-            "monthly_expense": total_exp,
+            "monthly_expense": total_expense,
             "monthly_balance": balance,
-            "total_saving_12m": total_saving,
+            "total_saving_12m": total_saving_12m,
             "expenses": expenses,
             "advice": advice
         },
-        "simulation_result": sim_result
-    })
-
-# ======================================================
-# 🧾 /history/{name} — ดึงประวัติผู้ใช้
-# ======================================================
-@app.get("/history/{name}")
-def get_history(name: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.name == name).first()
-
-    # ถ้ายังไม่มี user แต่มี record ให้สร้าง user ใหม่จาก record
-    if not user:
-        record = db.query(FinanceRecord).first()
-        if record:
-            new_user = User(name=name)
-            db.add(new_user)
-            db.commit()
-            db.refresh(new_user)
-            record.user_id = new_user.id
-            db.commit()
-            user = new_user
-        else:
-            raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้")
-
-    records = db.query(FinanceRecord).filter(FinanceRecord.user_id == user.id).all()
-    if not records:
-        raise HTTPException(status_code=404, detail="ไม่พบข้อมูลการจำลอง")
-
-    return {
-        "user": user.name,
-        "records": [{
-            "month": r.month,
-            "income": r.income,
-            "total_expense": r.total_expense,
-            "balance": r.balance,
-            "detail": r.detail,
-            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S")
-        } for r in records]
+        "simulation_result": months
     }
 
-# ======================================================
-# 🧭 /history/summary — แสดงรายชื่อผู้ใช้ + คำแนะนำล่าสุด
-# ======================================================
-@app.get("/history/summary")
-def get_summary(db: Session = Depends(get_db)):
-    # 🔧 ซ่อมข้อมูล orphan record (ไม่มี user_id)
-    orphan_records = db.query(FinanceRecord).filter(FinanceRecord.user_id == None).all()
-    for rec in orphan_records:
-        # ถ้าไม่มี user ให้สร้างจากชื่อ dummy
-        dummy_user = User(name="ผู้ใช้ไม่ระบุ")
-        db.add(dummy_user)
-        db.commit()
-        db.refresh(dummy_user)
-        rec.user_id = dummy_user.id
-        db.commit()
+# -----------------------------
+# 🧾 ประวัติย้อนหลัง
+# -----------------------------
+@app.get("/history/{name}")
+async def get_history(name: str):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT income, total_expense, balance, created_at FROM simulations WHERE name=? ORDER BY id DESC", (name,))
+    rows = c.fetchall()
+    conn.close()
+    records = [
+        {"income": row[0], "total_expense": row[1], "balance": row[2], "created_at": row[3]}
+        for row in rows
+    ]
+    return {"records": records}
 
-    users = db.query(User).all()
-    user_names, details = [], []
-
-    for u in users:
-        last_record = (
-            db.query(FinanceRecord)
-            .filter(FinanceRecord.user_id == u.id)
-            .order_by(FinanceRecord.created_at.desc())
-            .first()
-        )
-        if last_record:
-            user_names.append(u.name)
-            details.append({
-                "name": u.name,
-                "latest_advice": last_record.detail or "ยังไม่มีคำแนะนำ"
-            })
-
-    if not user_names:
-        raise HTTPException(status_code=404, detail="ยังไม่มีข้อมูลในระบบ")
-
-    return {"users": user_names, "details": details}
-
-# ======================================================
-# 🌍 Root
-# ======================================================
 @app.get("/")
 def root():
-    return {"message": "💰 Finance Simulation API is running successfully!"}
-
-# ======================================================
-# 🧩 Debug Route
-# ======================================================
-@app.on_event("startup")
-async def show_routes():
-    print("\n📍 Loaded Routes:")
-    for route in app.routes:
-        if hasattr(route, "path"):
-            print(f"➡️ {route.path}")
-    print("===================================\n")
+    return {"message": "🎓 Simulation API + AI Advisor + 🏠 Location Fee: อยู่บ้าน 0 บาท / ใกล้-ไกลมหาวิทยาลัย 1,500 บาท"}

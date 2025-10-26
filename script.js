@@ -1,5 +1,5 @@
 // ================================
-// 💰 Simulation Frontend Script (Stable Fixed Version)
+// 💰 Simulation Frontend Script (Final Version)
 // ================================
 
 const API_BASE = "http://127.0.0.1:8001";
@@ -20,6 +20,16 @@ async function simulate(e) {
 
   const name = document.getElementById("name").value.trim();
   const income = getNumber("income");
+  const locationVal = document.getElementById("location").value.trim();
+
+  // ✅ แปลงค่าจาก select เป็นข้อความภาษาไทย
+  const locationMap = {
+    home: "อยู่บ้าน",
+    near: "ใกล้มหาวิทยาลัย",
+    far: "ไกลมหาวิทยาลัย"
+  };
+  const location = locationMap[locationVal] || "ไม่ระบุ";
+
   const expenses = {
     house: getNumber("house"),
     car: getNumber("car"),
@@ -30,18 +40,19 @@ async function simulate(e) {
 
   if (!name) return alert("⚠️ กรุณากรอกชื่อผู้ใช้");
   if (income <= 0) return alert("⚠️ กรุณากรอกรายได้ต่อเดือน");
+  if (location === "ไม่ระบุ") return alert("⚠️ กรุณาเลือกประเภทที่พัก");
 
   try {
     const res = await fetch(`${API_BASE}/simulate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, income, expenses })
+      body: JSON.stringify({ name, income, expenses, location })
     });
 
     if (!res.ok) throw new Error("API ตอบกลับผิดพลาด");
     const data = await res.json();
 
-    renderResult(data);
+    renderResult(data, location);
   } catch (err) {
     console.error("❌ ERROR:", err);
     alert("❌ ไม่สามารถเชื่อมต่อ API ได้ กรุณาตรวจสอบการรัน main.py");
@@ -51,7 +62,7 @@ async function simulate(e) {
 // ----------------------
 // 📊 แสดงผลจำลอง
 // ----------------------
-function renderResult(data) {
+function renderResult(data, location) {
   const resultWrap = document.getElementById("resultWrap");
   const historyWrap = document.getElementById("historyWrap");
 
@@ -60,17 +71,26 @@ function renderResult(data) {
 
   const s = data.summary;
 
+  const locText = {
+    "อยู่บ้าน": "🏠 อยู่บ้าน (ไม่มีค่าใช้จ่ายเพิ่มเติม)",
+    "ใกล้มหาวิทยาลัย": "🏢 อยู่ใกล้มหาวิทยาลัย (+1,500 บาท ค่าน้ำค่าไฟ)",
+    "ไกลมหาวิทยาลัย": "🚆 อยู่ไกลมหาวิทยาลัย (+1,500 บาท ค่าน้ำค่าไฟ)"
+  }[location] || "ไม่ระบุ";
+
   document.getElementById("summary").innerHTML = `
     <p>👤 ชื่อผู้ใช้: <b>${s.name}</b></p>
+    <p>📍 ที่พักอาศัย: ${locText}</p>
     <p>💵 รายได้ต่อเดือน: ${baht(s.monthly_income)} บาท</p>
     <p>🧾 รายจ่ายรวมต่อเดือน: ${baht(s.monthly_expense)} บาท</p>
     <p>💰 คงเหลือต่อเดือน: <b class="text-green-700">${baht(s.monthly_balance)}</b> บาท</p>
     <p>🏦 เงินออมรวม 12 เดือน: <b class="text-blue-700">${baht(s.total_saving_12m)}</b> บาท</p>
   `;
 
-  // ตารางแสดงรายจ่ายแต่ละหมวด
+  // --------------------------
+  // 🧾 ตารางแสดงรายจ่ายแต่ละหมวด
+  // --------------------------
   const tbody1 = document.getElementById("breakdownTbody");
-  tbody1.innerHTML = Object.entries(s.expenses)
+  let rows = Object.entries(s.expenses)
     .map(([key, val]) => `
       <tr>
         <td class="border px-3 py-2">${translateExpenseKey(key)}</td>
@@ -79,7 +99,21 @@ function renderResult(data) {
     `)
     .join("");
 
-  // ตารางสรุปผลแต่ละเดือน
+  // ✅ เงื่อนไข: แสดงค่าน้ำค่าไฟเฉพาะเมื่อไม่ใช่ "อยู่บ้าน"
+  if (location !== "อยู่บ้าน") {
+    rows += `
+      <tr>
+        <td class="border px-3 py-2">ค่าน้ำค่าไฟ</td>
+        <td class="border px-3 py-2 text-right">${baht(1500)}</td>
+      </tr>
+    `;
+  }
+
+  tbody1.innerHTML = rows;
+
+  // --------------------------
+  // 📆 ตารางสรุปผลแต่ละเดือน
+  // --------------------------
   const tbody2 = document.getElementById("monthlyTbody");
   tbody2.innerHTML = data.simulation_result
     .map(m => `
@@ -91,14 +125,13 @@ function renderResult(data) {
     `)
     .join("");
 
-  // ข้อเสนอแนะ
+  // 💡 ข้อเสนอแนะทางการเงิน
   document.getElementById("adviceBox").classList.remove("hidden");
   document.getElementById("adviceText").textContent = s.advice || "ไม่มีคำแนะนำเพิ่มเติม";
 
-  // Scroll smooth
+  // เลื่อนลงมาแสดงผลลัพธ์
   resultWrap.scrollIntoView({ behavior: "smooth" });
 
-  // ล็อกหน้าจอไม่ให้ reload ล้างผล
   window.__lockSimulation = true;
 }
 
@@ -150,7 +183,7 @@ async function showHistory(e) {
 function translateExpenseKey(key) {
   const dict = {
     house: "บ้าน",
-    car: "รถ",
+    car: "รถ / เดินทาง",
     food: "อาหาร",
     saving: "เงินออม",
     travel: "ท่องเที่ยว"

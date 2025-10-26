@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>💰 ระบบจำลองการเงินส่วนบุคคล </title>
+  <title>💰 ระบบจำลองการเงินนักศึกษา </title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="script.js"></script>
 
-  <!-- 🎨 เพิ่มฟอนต์และสไตล์ Glass UI -->
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap');
 
@@ -43,7 +42,7 @@
       color: #1e3a8a;
     }
 
-    input {
+    input, select {
       border: 1px solid #d1d5db;
       border-radius: 10px;
       padding: 8px 10px;
@@ -51,7 +50,7 @@
       transition: 0.25s;
     }
 
-    input:focus {
+    input:focus, select:focus {
       border-color: #2563eb;
       box-shadow: 0 0 0 3px rgba(59,130,246,0.3);
       outline: none;
@@ -115,7 +114,7 @@
 
 <body class="min-h-screen text-gray-800 fadeIn">
   <div class="max-w-4xl mx-auto py-10 px-5">
-    <h1 class="text-3xl text-center mb-8">💸 ระบบจำลองการเงินส่วนบุคคล </h1>
+    <h1 class="text-3xl text-center mb-8">💸 ระบบจำลองการเงินนักศึกษา</h1>
 
     <!-- 🧾 ฟอร์มกรอกข้อมูล -->
     <div id="formSim" class="panel p-6 mb-10">
@@ -126,17 +125,64 @@
         </div>
         <div>
           <label>รายได้ต่อเดือน (บาท)</label>
-          <input id="income" type="number" min="0" placeholder="เช่น 50000" />
+          <input id="income" type="number" min="0" placeholder="เช่น 15000" />
         </div>
+      </div>
+
+      <!-- ✅ ที่พักอาศัย -->
+      <div class="mt-4">
+        <label>🏡 ที่พักอาศัย</label>
+        <select id="location">
+          <option value="" disabled selected>— โปรดเลือกประเภทที่พัก —</option>
+          <option value="home">🏠 อยู่บ้าน  </option>
+          <option value="near">🏡 อยู่ใกล้มหาวิทยาลัย </option>
+          <option value="far">🚗 อยู่ไกลมหาวิทยาลัย </option>
+        </select>
+        <p class="text-sm text-gray-500 mt-1">
+        </p>
       </div>
 
       <h3 class="mt-6 mb-2 font-semibold text-blue-600">📊 รายจ่ายต่อเดือน</h3>
       <div class="grid md:grid-cols-3 gap-3">
-        <div><label>🏠 บ้าน</label><input id="house" type="number" min="0" /></div>
-        <div><label>🚗 รถ</label><input id="car" type="number" min="0" /></div>
-        <div><label>🍜 อาหาร</label><input id="food" type="number" min="0" /></div>
-        <div><label>💰 เงินออม</label><input id="saving" type="number" min="0" /></div>
-        <div><label>✈️ ท่องเที่ยว</label><input id="travel" type="number" min="0" /></div>
+        <div>
+          <label>🏠 ค่าที่พัก</label>
+          <input id="house" type="number" min="0" placeholder="เช่น 2500" />
+          <p class="text-sm text-gray-500 mt-1">
+            *ระบบจะบวกเพิ่มค่าไฟและค่าน้ำประมาน 1500
+          </p>
+        </div>
+
+        <div>
+          <label>🚗 รถ / เดินทาง</label>
+          <input id="car" type="number" min="0" placeholder="เช่น 800" />
+          <p class="text-sm text-gray-500 mt-1">
+            *รวมค่ารถประจำทาง, ค่าน้ำมัน หรือค่าเดินทางอื่น ๆ
+          </p>
+        </div>
+
+        <div>
+          <label>🍜 อาหาร</label>
+          <input id="food" type="number" min="0" placeholder="เช่น 3000" />
+          <p class="text-sm text-gray-500 mt-1">
+            *รวมค่าอาหารในแต่ละเดือน เช่น ข้าวกลางวัน, ของว่าง
+          </p>
+        </div>
+
+        <div>
+          <label>💰 เงินออม</label>
+          <input id="saving" type="number" min="0" placeholder="เช่น 1000" />
+          <p class="text-sm text-gray-500 mt-1">
+            *จำนวนเงินที่ตั้งใจเก็บออมต่อเดือน
+          </p>
+        </div>
+
+        <div>
+          <label>✈️ เงินพิเศษ</label>
+          <input id="travel" type="number" min="0" placeholder="เช่น 500" />
+          <p class="text-sm text-gray-500 mt-1">
+            *เช่น ค่าเที่ยว, ซื้อของ, ดูหนัง, ความบันเทิงต่าง ๆ
+          </p>
+        </div>
       </div>
 
       <!-- ✅ ปุ่ม -->
@@ -175,7 +221,6 @@
         <tbody id="monthlyTbody"></tbody>
       </table>
 
-      <!-- ✅ คำแนะนำ -->
       <div id="adviceBox" class="mt-4 bg-blue-50 border border-blue-300 rounded-xl shadow p-4">
         <h3 class="text-lg font-semibold text-blue-700 mb-2">💡 คำแนะนำทางการเงิน</h3>
         <p id="adviceText" class="text-gray-700"></p>
@@ -189,9 +234,9 @@
         <thead>
           <tr>
             <th>ครั้งที่</th>
-            <th>รายได้ (บาท)</th>
-            <th>รายจ่าย (บาท)</th>
-            <th>คงเหลือ (บาท)</th>
+            <th>รายได้</th>
+            <th>รายจ่าย</th>
+            <th>คงเหลือ</th>
             <th>วันที่บันทึก</th>
           </tr>
         </thead>
